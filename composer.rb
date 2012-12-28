@@ -148,9 +148,23 @@ def html_to_haml(source)
 end
 
 def html_to_slim(source)
-  html = open(source) {|input| input.binmode.read }
-  haml = Haml::HTML.new(html, :erb => true, :xhtml => true).render
-  Haml2Slim.convert!(haml)
+  begin
+    html = open(source) {|input| input.binmode.read }
+    haml = Haml::HTML.new(html, :erb => true, :xhtml => true).render
+  rescue RubyParser::SyntaxError
+      say_wizard "Ignoring RubyParser::SyntaxError"
+      # special case to accommodate https://github.com/RailsApps/rails-composer/issues/55
+      html = open(source) {|input| input.binmode.read }
+      say_wizard "applying patch" if html.include? 'card_month'
+      say_wizard "applying patch" if html.include? 'card_year'
+      html = html.gsub(/, {add_month_numbers: true}, {name: nil, id: "card_month"}/, '')
+      html = html.gsub(/, {start_year: Date\.today\.year, end_year: Date\.today\.year\+10}, {name: nil, id: "card_year"}/, '')
+      haml = Haml::HTML.new(html, :erb => true, :xhtml => true).render
+      haml = haml.gsub(/select_month nil/, "select_month nil, {add_month_numbers: true}, {name: nil, id: \"card_month\"}")
+      haml = haml.gsub(/select_year nil/, "select_year nil, {start_year: Date.today.year, end_year: Date.today.year+10}, {name: nil, id: \"card_year\"}")
+    ensure
+      Haml2Slim.convert!(haml)
+    end
 end
 
 # full credit to @mislav in this StackOverflow answer for the #which() method:
